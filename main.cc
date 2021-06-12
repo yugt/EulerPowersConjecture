@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cassert>
 #include <numeric>
-#include <ranges>
 #include <vector>
 #include <cmath>
 
@@ -28,8 +27,11 @@ class EulerSum{
 	size_t range;
 	void thread_parent(){
 		// serial implementation
-		auto r=ranges::iota_view(range, 2*range);
-		for_each(r.begin(), r.end(), thread_child);
+		vector<size_t> r(range, range);
+		for(auto it=r.begin(); it!=r.end(); it++){
+			(*it)+=it-r.begin();
+		}
+		for(auto& n:r) thread_child(n);
 	}
 
 	void thread_child(size_t sum){
@@ -75,7 +77,7 @@ class EulerSum{
 	}
 
 public:
-	EulerSum(auto l, auto p, auto r):
+	EulerSum(size_t l, size_t p, size_t r):
 		length(l), power(p), range(r) {
 			if(range<length){
 				cerr << endl;
