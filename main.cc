@@ -1,8 +1,9 @@
 #include <iostream>
-#include <cassert>
 #include <numeric>
+#include <thread>
 #include <vector>
 #include <cmath>
+#include <mutex>
 
 using namespace std;
 
@@ -25,13 +26,16 @@ class EulerSum{
 	size_t length;
 	size_t power;
 	size_t range;
+	mutex m;
+
+	// multithread faster than OpenMP parallel for
 	void thread_parent(){
-		// serial implementation
-		vector<size_t> r(range, range);
-		for(auto it=r.begin(); it!=r.end(); it++){
-			(*it)+=it-r.begin();
+		vector<thread> v;
+		v.reserve(range);
+		for(size_t i=range; i<2*range; ++i){
+			v.push_back(thread([this,i]{thread_child(i);}));
 		}
-		for(auto& n:r) thread_child(n);
+		for(auto& n:v) n.join();
 	}
 
 	void thread_child(size_t sum){
@@ -50,14 +54,15 @@ class EulerSum{
 		}
 	}
 
-	// solutions are sparse, no need for mutex
 	void print_solution(const vector<size_t>& v, double sum){
+		m.lock(); // avoid mixing outputs from different threads
 		printf("%.0f^%lu\t=\t", sum, power);
 		printf("%lu^%lu", v.front(), power);
 		for(auto it=v.begin()+1; it!=v.end();it++){
 			printf("\t+\t%lu^%lu", *it, power);
 		}
 		printf("\n");
+		m.unlock();
 	}
 
 	// single thread, recursion
@@ -69,9 +74,10 @@ class EulerSum{
 			}
 		}else{
 			for(v[idx]=(idx==0 ? 1: v[idx-1]);
-			accumulate(v.begin(), v.begin()+idx+1, 0)<=sum-(idx+2==v.size() ? v[idx] : v.size()-idx);
-			v[idx]++){
-				generate_simplex(v, sum, idx+1);
+				accumulate(v.begin(), v.begin()+idx+1, 0)<=
+				sum-(idx+2==v.size() ? v[idx] : v.size()-idx);
+				v[idx]++){
+					generate_simplex(v, sum, idx+1);
 			}
 		}
 	}
@@ -80,15 +86,17 @@ public:
 	EulerSum(size_t l, size_t p, size_t r):
 		length(l), power(p), range(r) {
 			if(range<length){
-				cerr << endl;
-				return;
+				range=length;
 			}
 			thread_parent();
 	}
 };
 
 int main(int argc, char* argv[]){
-	assert(argc==4);
+	if(argc!=4){
+		cerr << "input:\tlength\tpower\trange\n";
+		return EXIT_FAILURE;
+	}
 	EulerSum _(
 		static_cast<size_t>(atoi(argv[1])),
 		static_cast<size_t>(atoi(argv[2])),
