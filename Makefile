@@ -5,10 +5,10 @@ libs = -lm -lgmp -pthread
 exce = main
 
 debug:
-	$(compiler) -g $(standard) $(libs) $(source) -o $(exce)
+	$(compiler) $(source) -g $(standard) $(libs) -o $(exce)
 
 release: $(exce)
-	$(compiler) -O3 $(standard) $(libs) $(source) -o $(exce)
+	$(compiler) $(source) -O3 $(standard) $(libs) -o $(exce)
 
 clean:
 	rm $(exce)
