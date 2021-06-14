@@ -1,9 +1,11 @@
 #include <iostream>
 #include <numeric>
+#include <limits>
 #include <thread>
 #include <vector>
 #include <cmath>
 #include <mutex>
+#include <gmpxx.h>
 
 using namespace std;
 
@@ -23,6 +25,8 @@ auto gcd(container C){
 }
 
 class EulerSum{
+	const long double max_sum =
+	static_cast<double>(numeric_limits<size_t>::max());
 	size_t length;
 	size_t power;
 	size_t range;
@@ -34,6 +38,7 @@ class EulerSum{
 		v.reserve(range);
 		for(size_t i=range; i<2*range; ++i){
 			v.push_back(thread([this,i]{thread_child(i);}));
+			// thread_child(i);
 		}
 		for(auto& n:v) n.join();
 	}
@@ -44,19 +49,38 @@ class EulerSum{
 	}
 
 	void check_sum(const vector<size_t>& v){
-		double powersum=0.0;
+		long double powersum=0.0;
 		for(auto&n:v){
 			powersum+=pow(n, power);
 		}
-		double sumroot = round(pow(powersum, 1.0/power));
-		if(abs(powersum-pow(sumroot, power))<1e-2){
-			print_solution(v, sumroot);
+		long double sumroot = round(pow(powersum, 1.0/power));
+		if(abs(powersum-pow(sumroot, power))<1e-3){
+			if(powersum>max_sum){
+				check_sum(v, static_cast<size_t>(sumroot));
+			}else{
+				print_solution(v, static_cast<size_t>(sumroot));
+			}
 		}
 	}
 
-	void print_solution(const vector<size_t>& v, double sum){
+	void check_sum(const vector<size_t>&v, const size_t candidate){
+		mpz_t ps, rs;
+		mpz_init(rs);
+		mpz_init_set_ui(ps, candidate);
+		mpz_pow_ui(ps, ps, power);
+		for(auto&n:v){
+			mpz_set_ui(rs, n);
+			mpz_pow_ui(rs, rs, power);
+			mpz_sub(ps, ps, rs);
+		}
+		if(mpz_cmp_ui(ps, 0)==0){
+			print_solution(v, candidate);
+		}
+	}
+
+	void print_solution(const vector<size_t>& v, const size_t sum){
 		m.lock(); // avoid mixing outputs from different threads
-		printf("%.0f^%lu\t=\t", sum, power);
+		printf("%lu^%lu\t=\t", sum, power);
 		printf("%lu^%lu", v.front(), power);
 		for(auto it=v.begin()+1; it!=v.end();it++){
 			printf("\t+\t%lu^%lu", *it, power);
@@ -87,6 +111,9 @@ public:
 		length(l), power(p), range(r) {
 			if(range<length){
 				range=length;
+			}
+			if(power>10){
+				cerr << "warning: unstable\n";
 			}
 			thread_parent();
 	}
