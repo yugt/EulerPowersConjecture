@@ -55,11 +55,7 @@ class EulerSum{
 		}
 		long double sumroot = round(pow(powersum, 1.0/power));
 		if(abs(powersum-pow(sumroot, power))<1e-3){
-			if(powersum>max_sum){
-				check_sum(v, static_cast<size_t>(sumroot));
-			}else{
-				print_solution(v, static_cast<size_t>(sumroot));
-			}
+			check_sum(v, static_cast<size_t>(sumroot));
 		}
 	}
 
