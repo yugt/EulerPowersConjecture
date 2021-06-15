@@ -13,7 +13,6 @@ using std::mutex;
 using std::vector;
 using std::thread;
 using std::unique_lock;
-using std::numeric_limits;
 
 template<class num>
 num gcd(num a, num b){
@@ -31,8 +30,6 @@ auto gcd(container C){
 }
 
 class EulerSum{
-	const long double max_sum =
-	static_cast<double>(numeric_limits<size_t>::max());
 	vector<vector<size_t>> result;
 	std::condition_variable cv;
 	std::atomic<size_t> counter;
@@ -51,35 +48,36 @@ class EulerSum{
 		tasks.reserve(up_bound-range);
 		for(size_t i=range; i<up_bound; ++i){
 			tasks.push_back(thread([this,i]{thread_child(i);}));
-			// thread_child(i);
 		}
-		for(auto& n:tasks) n.join();
-		unique_lock<mutex> lck(m);
-		cv.wait(lck, [this]{return counter==tasks.size();});
+		{// parallel begin
+			for(auto& n:tasks) n.join();
+			unique_lock<mutex> lck(m);
+			// wait until all tread_children finish
+			cv.wait(lck, [this]{return counter==tasks.size();});
+		}// parallel end
 		if(result.size()>1){
 			std::sort(result.begin(), result.end(),
-				[](const vector<size_t>& a, const vector<size_t>& b){return a.front() < b.front();});
+				[](const vector<size_t>& a, const vector<size_t>& b)
+					{return a.front() < b.front();});
 			if(search_min) result.resize(1);
 		}
 	}
 
 	void thread_child(size_t sum){
-		vector<size_t> v(length,1);
-		generate_simplex(v,sum,0);
+		vector<size_t> v(length, 1);
+		generate_simplex(v, sum, 0);
 		unique_lock<mutex> _(m);
 		counter++;
 		cv.notify_one();
 	}
 
 	void check_sum(const vector<size_t>& v){
-		long double powersum=0.0;
-		for(auto&n:v){
-			powersum+=pow(n, power);
-		}
+		long double power_sum=0.0;
+		for(auto&n:v) power_sum+=pow(n, power);	
 		// not tested for large exponent (power>10)
-		long double sumroot = round(pow(powersum, 1.0/power));
-		if(abs(powersum-pow(sumroot, power))<1e-3){
-			check_sum(v, static_cast<size_t>(sumroot));
+		long double sum_root = round(pow(power_sum, 1.0L/power));
+		if(abs(power_sum-pow(sum_root, power))<1e-3){
+			check_sum(v, static_cast<size_t>(sum_root));
 		}
 	}
 
@@ -94,29 +92,27 @@ class EulerSum{
 			mpz_sub(ps, ps, rs);
 		}
 		if(mpz_cmp_ui(ps, 0)==0){
-			print_solution(v, candidate);
+			append_solution(v, candidate);
 		}
 	}
 
-	void print_solution(const vector<size_t>& v, const size_t sum){
+	void append_solution(const vector<size_t>& v, const size_t sum){
 		unique_lock<mutex> _(m);
 		found=true;
 		result.push_back({sum});
 		result.back().insert(result.back().end(), v.begin(), v.end());
 	}
 
-	// single thread, recursion
+	// single thread, recursion, iterated for loops
 	void generate_simplex(vector<size_t>& v, const size_t sum, size_t idx){
 		if(search_min && found) return;
 		if(idx+1==v.size()){
 			v.back()=sum-accumulate(v.begin(), v.begin()+idx, 0);
-			if(gcd(v)==1){
-				check_sum(v);
-			}
+			if(gcd(v)==1) check_sum(v);
 		}else{
 			for(v[idx]=(idx==0 ? 1: v[idx-1]);
 				static_cast<size_t>(accumulate(v.begin(), v.begin()+idx+1, 0))<=
-				sum-(idx+2==v.size() ? v[idx] : v.size()-idx);
+					sum-(idx+2==v.size() ? v[idx] : v.size()-idx);
 				v[idx]++){
 					generate_simplex(v, sum, idx+1);
 			}
@@ -127,6 +123,13 @@ public:
 	EulerSum(size_t l, size_t p, size_t r):
 		length(l), power(p), range(std::max(r,l)) {
 			search_min = true;
+			/*
+			search result is not guaranteed to be the minimum:
+			eg: length=2, power=2, range=[7..17]
+			thread1: thread_child( 7) -> 5^2 = 3^2 + 4^2
+			thread2: thread_child(17) -> 13^3 = 5^2 + 12^2
+			but thread2 may return earlier than thread1
+			*/
 			// not tested for p>10
 	}
 
