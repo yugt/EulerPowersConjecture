@@ -37,16 +37,15 @@ class EulerSum{
 	vector<thread> tasks;
 	const size_t length;
 	const size_t power;
-	const size_t range;
 	bool search_min;
 	mutex m;
 
 	// multithread faster than OpenMP parallel for
-	void thread_parent(size_t up_bound){
+	void thread_parent(size_t begin, size_t end){
 		counter=0;
 		found=false;
-		tasks.reserve(up_bound-range);
-		for(size_t i=range; i<up_bound; ++i){
+		tasks.reserve(end-begin);
+		for(size_t i=begin; i<end; ++i){
 			tasks.push_back(thread([this,i]{thread_child(i);}));
 		}
 		{// parallel begin
@@ -68,7 +67,8 @@ class EulerSum{
 		generate_simplex(v, sum, 0);
 		unique_lock<mutex> _(m);
 		counter++;
-		cv.notify_one();
+		if(counter==tasks.size())
+			cv.notify_one();
 	}
 
 	void check_sum(const vector<size_t>& v){
@@ -120,17 +120,16 @@ class EulerSum{
 	}
 
 public:
-	EulerSum(size_t l, size_t p, size_t r):
-		length(l), power(p), range(std::max(r,l)) {
-			search_min = true;
-			/*
-			search result is not guaranteed to be the minimum:
-			eg: length=2, power=2, range=[7..17]
-			thread1: thread_child( 7) -> 5^2 = 3^2 + 4^2
-			thread2: thread_child(17) -> 13^3 = 5^2 + 12^2
-			but thread2 may return earlier than thread1
-			*/
-			// not tested for p>10
+	EulerSum(size_t l, size_t p) : length(l), power(p) {
+	       	search_min = true;
+	       	/*
+	       	search result is not guaranteed to be the minimum:
+	       	eg: length=2, power=2, range=[7..17]
+	       	thread1: thread_child( 7) -> 5^2 = 3^2 + 4^2
+	       	thread2: thread_child(17) -> 13^3 = 5^2 + 12^2
+	       	but thread2 may return earlier than thread1
+	       	*/
+	       	// not tested for p>10
 	}
 
 	// stop after finding minimum
@@ -140,8 +139,9 @@ public:
 	}
 
 	// called by MPI node
-	vector<vector<size_t>>& run(size_t width){
-		thread_parent(range+width);
+	vector<vector<size_t>>& run(size_t begin, size_t width){
+		begin = begin < length ? length : begin;
+		thread_parent(begin, begin+width);
 		return result;
 	}
 };
