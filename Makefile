@@ -1,14 +1,15 @@
-compiler = g++
-standard = -std=c++17
-source = main.cc
+std = -std=c++17
 libs = -lm -lgmp -pthread
+flag = -Wall -Wextra -Wpedantic
 exce = main
 
-debug:
-	$(compiler) $(source) -g $(standard) $(libs) -o $(exce)
 
-release: $(exce)
-	$(compiler) $(source) -O3 $(standard) $(libs) -o $(exce)
+EulerSum: EulerSum.cc
+	g++ $< -g -c $(flag) $(std) $(libs) -o $@.o
+
+
+mpi_call: mpi_caller.cc EulerSum.o
+	mpicxx $^ $(std) $(libs) $(flag) -o $(exce)
 
 clean:
-	rm $(exce)
+	rm $(exce) *.o

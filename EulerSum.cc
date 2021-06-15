@@ -1,4 +1,4 @@
-#include <iostream>
+#include <algorithm>
 #include <numeric>
 #include <atomic>
 #include <limits>
@@ -56,6 +56,11 @@ class EulerSum{
 		for(auto& n:tasks) n.join();
 		unique_lock<mutex> lck(m);
 		cv.wait(lck, [this]{return counter==tasks.size();});
+		if(result.size()>1){
+			std::sort(result.begin(), result.end(),
+				[](const vector<size_t>& a, const vector<size_t>& b){return a.front() < b.front();});
+			if(search_min) result.resize(1);
+		}
 	}
 
 	void thread_child(size_t sum){
@@ -110,7 +115,7 @@ class EulerSum{
 			}
 		}else{
 			for(v[idx]=(idx==0 ? 1: v[idx-1]);
-				accumulate(v.begin(), v.begin()+idx+1, 0)<=
+				static_cast<size_t>(accumulate(v.begin(), v.begin()+idx+1, 0))<=
 				sum-(idx+2==v.size() ? v[idx] : v.size()-idx);
 				v[idx]++){
 					generate_simplex(v, sum, idx+1);
@@ -121,10 +126,8 @@ class EulerSum{
 public:
 	EulerSum(size_t l, size_t p, size_t r):
 		length(l), power(p), range(std::max(r,l)) {
-			if(power>10){
-				std::cerr << "warning: unstable\n";
-			}
 			search_min = true;
+			// not tested for p>10
 	}
 
 	// stop after finding minimum
@@ -134,30 +137,8 @@ public:
 	}
 
 	// called by MPI node
-	void run(size_t width){
+	vector<vector<size_t>>& run(size_t width){
 		thread_parent(range+width);
-		for(auto&v : result){
-			printf("%lu^%lu\t=\t", v[0], power);
-			printf("%lu^%lu", v[1], power);
-			for(auto it=v.begin()+2; it!=v.end();it++){
-				printf("\t+\t%lu^%lu", *it, power);
-			}
-			printf("\n");
-		}
+		return result;
 	}
 };
-
-int main(int argc, char* argv[]){
-	if(argc!=4){
-		std::cerr << "input:\tlength\tpower\trange\n";
-		return EXIT_FAILURE;
-	}
-	EulerSum instance(
-		static_cast<size_t>(atoi(argv[1])),
-		static_cast<size_t>(atoi(argv[2])),
-		static_cast<size_t>(atoi(argv[3]))
-		);
-	instance.configure(true);
-	instance.run(1024);
-	return EXIT_SUCCESS;
-}
